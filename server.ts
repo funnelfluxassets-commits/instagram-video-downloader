@@ -592,9 +592,56 @@ app.get('/api/proxy-download', async (req, res) => {
       return res.status(500).json({ error: 'Failed to generate media file.' });
     }
 
-    const stat = fs.statSync(tmpFile);
+    let finalFile = tmpFile;
+    if (!isAudio) {
+      const fixedFile = path.join('/tmp', `${tempFileId}_qt.mp4`);
+      try {
+        console.log('[ffmpeg] Post-processing for QuickTime/iOS compatibility...');
+        await execFileAsync(ffmpegBin, [
+          '-y',
+          '-i', tmpFile,
+          '-c:v', 'copy',
+          '-c:a', 'aac',
+          '-b:a', '192k',
+          '-movflags', '+faststart',
+          fixedFile,
+        ], { timeout: 35000 });
+
+        if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
+          try { fs.unlinkSync(tmpFile); } catch {}
+          finalFile = fixedFile;
+          console.log('[ffmpeg] Post-processing successful');
+        }
+      } catch (ffErr: any) {
+        console.warn('[ffmpeg] Direct copy failed, encoding to universal H.264:', ffErr?.message);
+        try {
+          await execFileAsync(ffmpegBin, [
+            '-y',
+            '-i', tmpFile,
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-crf', '22',
+            '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-movflags', '+faststart',
+            fixedFile,
+          ], { timeout: 45000 });
+
+          if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
+            try { fs.unlinkSync(tmpFile); } catch {}
+            finalFile = fixedFile;
+            console.log('[ffmpeg] Universal H.264 encode successful');
+          }
+        } catch (encErr: any) {
+          console.warn('[ffmpeg] Fallback encode warning:', encErr?.message);
+        }
+      }
+    }
+
+    const stat = fs.statSync(finalFile);
     if (stat.size === 0) {
-      try { fs.unlinkSync(tmpFile); } catch {}
+      try { fs.unlinkSync(finalFile); } catch {}
       return res.status(500).json({ error: 'Generated file is empty.' });
     }
 
@@ -604,11 +651,12 @@ app.get('/api/proxy-download', async (req, res) => {
     res.setHeader('Content-Length', String(stat.size));
     res.setHeader('Cache-Control', 'no-cache');
 
-    const readStream = fs.createReadStream(tmpFile);
+    const readStream = fs.createReadStream(finalFile);
     readStream.pipe(res);
 
     const cleanup = () => {
       try {
+        if (fs.existsSync(finalFile)) fs.unlinkSync(finalFile);
         if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
       } catch {}
     };
