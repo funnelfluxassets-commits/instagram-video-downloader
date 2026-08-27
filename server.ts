@@ -557,15 +557,18 @@ app.get('/api/proxy-download', async (req, res) => {
       let maxHeight = isShortsVideo ? (qNum === 720 ? 1280 : 1920) : (qNum === 720 ? 720 : 1080);
       let maxWidth = isShortsVideo ? (qNum === 720 ? 720 : 1080) : (qNum === 720 ? 1280 : 1920);
 
-      const format = `bestvideo[vcodec^=avc][height<=${maxHeight}][width<=${maxWidth}]+bestaudio[acodec^=mp4a]/bestvideo[height<=${maxHeight}][width<=${maxWidth}]+bestaudio/best[height<=${maxHeight}]/best`;
+      const h264Vid = `bestvideo[vcodec^=avc][height<=${maxHeight}][width<=${maxWidth}]`;
+      const fallbackVid = `bestvideo[height<=${maxHeight}][width<=${maxWidth}]`;
+      const format = `${h264Vid}+bestaudio[acodec^=mp4a]/${h264Vid}+bestaudio/${fallbackVid}+bestaudio[acodec^=mp4a]/${fallbackVid}+bestaudio/best[height<=${maxHeight}]/best`;
 
       ytdlpArgs = [
         '-f', format,
         '--merge-output-format', 'mp4',
         '--ffmpeg-location', ffmpegBin,
-        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
+        '--postprocessor-args', 'ffmpeg:-c:v copy -c:a aac -b:a 192k -movflags +faststart',
         '-o', tmpFile,
         '--no-playlist',
+        '--js-runtimes', 'node',
         ...cookieArgs,
         targetUrl,
       ];
