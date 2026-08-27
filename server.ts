@@ -577,7 +577,12 @@ app.get('/api/proxy-download', async (req, res) => {
     } catch (execErr: any) {
       const errDetail = (execErr?.stderr || execErr?.message || 'unknown error').slice(0, 300);
       console.error('[yt-dlp] Exec error:', errDetail);
-      return res.status(500).json({ error: 'Could not process media download.', detail: errDetail });
+
+      let userFriendlyMsg = 'Could not process media download.';
+      if (errDetail.includes('not granting access') || errDetail.includes('empty media response') || errDetail.includes('Sign in') || errDetail.includes('cookies')) {
+        userFriendlyMsg = 'Instagram requires session authentication. Please add INSTAGRAM_COOKIES to Vercel Environment Variables.';
+      }
+      return res.status(500).json({ error: userFriendlyMsg, detail: errDetail });
     }
 
     if (!fs.existsSync(tmpFile)) {
@@ -615,8 +620,39 @@ app.get('/api/proxy-download', async (req, res) => {
   } catch (err: any) {
     console.error('Download proxy error:', err);
     if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to stream media file.' });
+      res.status(500).json({ error: 'Failed to stream media file.', detail: err?.message });
     }
+  }
+});
+
+// ─── API: /api/proxy-stream ──────────────────────────────────────────────────
+
+app.get('/api/proxy-stream', async (req, res) => {
+  try {
+    const { url } = req.query;
+    if (!url || typeof url !== 'string') {
+      return res.status(400).json({ error: 'Missing stream URL' });
+    }
+
+    const streamRes = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        Referer: 'https://www.instagram.com/',
+      },
+    });
+
+    if (!streamRes.ok) {
+      return res.status(streamRes.status).json({ error: 'Stream source unavailable' });
+    }
+
+    const contentType = streamRes.headers.get('content-type') || 'video/mp4';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+
+    const arrayBuffer = await streamRes.arrayBuffer();
+    return res.end(Buffer.from(arrayBuffer));
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to proxy media stream' });
   }
 });
 

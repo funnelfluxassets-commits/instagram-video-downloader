@@ -1,17 +1,21 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Download,
-  Film,
-  Music,
-  Image,
-  Check,
-  Loader2,
-  Share2,
+  Play,
   Copy,
-  RotateCcw,
+  Check,
   Sparkles,
-  ExternalLink,
+  Film,
+  FileVideo,
+  FileAudio,
+  AlertCircle,
+  RotateCcw,
+  Tag,
+  Smartphone,
+  CheckCircle2,
+  Loader2,
   Instagram,
+  ImageIcon,
 } from 'lucide-react';
 import { InstagramMediaResult, DownloadOption } from '../types';
 
@@ -21,33 +25,61 @@ interface ResultCardProps {
 }
 
 export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDownload }) => {
+  const [isPlayingVideo, setIsPlayingVideo] = useState(false);
+  const [copiedCaption, setCopiedCaption] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadSuccessId, setDownloadSuccessId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const [customFilename, setCustomFilename] = useState(result.title);
-  const [copiedTitle, setCopiedTitle] = useState(false);
+  const [selectedDownloadId, setSelectedDownloadId] = useState<string | null>(
+    () => result.downloads.find((d) => d.recommend)?.id || result.downloads[0]?.id || null
+  );
 
-  const handleCopyTitle = () => {
-    navigator.clipboard.writeText(result.title);
-    setCopiedTitle(true);
-    setTimeout(() => setCopiedTitle(false), 2000);
+  const cleanForFilename = (str: string): string => {
+    return str
+      .replace(/[^\w\s-]/gi, '')
+      .replace(/[\s_]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+      .slice(0, 80);
   };
 
-  const handleResetFilename = () => {
-    setCustomFilename(result.title);
+  const titleSlug = useMemo(() => {
+    const raw = result.title || '';
+    const cleaned = cleanForFilename(raw);
+    return cleaned || 'instagram_video';
+  }, [result.title]);
+
+  const authorSlug = useMemo(() => {
+    return cleanForFilename(result.author.username || result.author.name || 'instagram_creator');
+  }, [result.author.username, result.author.name]);
+
+  const presetCreatorCaption = useMemo(() => {
+    return `${authorSlug}_${titleSlug}`;
+  }, [authorSlug, titleSlug]);
+
+  const presetCaptionOnly = useMemo(() => {
+    return titleSlug;
+  }, [titleSlug]);
+
+  const presetCreatorId = useMemo(() => {
+    return `${authorSlug}_${result.id}`;
+  }, [authorSlug, result.id]);
+
+  const [customFilename, setCustomFilename] = useState<string>(presetCreatorCaption);
+
+  const handleCopyCaption = () => {
+    if (result.title) {
+      navigator.clipboard.writeText(result.title);
+      setCopiedCaption(true);
+      setTimeout(() => setCopiedCaption(false), 2000);
+    }
   };
 
-  const handleDownload = async (option: DownloadOption) => {
+  const handleTriggerDownload = async (option: DownloadOption) => {
+    setDownloadingId(option.id);
+    setDownloadError(null);
+
     try {
-      setDownloadingId(option.id);
-      setDownloadError(null);
-
-      const baseName = (customFilename || result.title || 'instagram_media')
-        .replace(/[<>:"/\\|?*\x00-\x1F]/g, '')
-        .replace(/[\s_]+/g, '_')
-        .trim()
-        .slice(0, 100);
-
+      const baseName = cleanForFilename(customFilename.trim()) || presetCreatorCaption;
       let suffix = '';
       if (option.type === 'audio') {
         suffix = '_audio';
@@ -102,144 +134,178 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
 
   return (
     <div className="w-full max-w-4xl mx-auto bg-white dark:bg-zinc-900 rounded-3xl p-4 sm:p-7 shadow-2xl border border-zinc-200 dark:border-zinc-800 transition-all space-y-6">
-      {/* Top Header Badge & Copy Title */}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-100 dark:border-zinc-800 pb-4">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800">
-            <Instagram className="w-3.5 h-3.5" />
-            {result.isReel ? 'INSTAGRAM REEL' : 'INSTAGRAM POST'}
-          </span>
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-            <Sparkles className="w-3 h-3 text-amber-500" /> FULL HD READY
-          </span>
+      {/* Header Info */}
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+        <div className="space-y-1.5 flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1 text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800">
+              <Instagram className="w-3 h-3 text-rose-500" />
+              {result.isReel ? 'Instagram Reel (9:16)' : 'Instagram Post'}
+            </span>
+
+            <span className="inline-flex items-center gap-1 text-[11px] font-extrabold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800">
+              <Sparkles className="w-3 h-3 text-amber-500" />
+              Full HD Ready
+            </span>
+          </div>
+
+          <h2 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-white line-clamp-2 leading-snug">
+            {result.title}
+          </h2>
+
+          <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400">
+            <span className="font-semibold text-zinc-800 dark:text-zinc-200">
+              @{result.author.username || result.author.name}
+            </span>
+            <span>•</span>
+            <span className="text-emerald-500 font-semibold flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              Direct File Download (Zero Ads)
+            </span>
+          </div>
         </div>
 
         <button
-          onClick={handleCopyTitle}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-zinc-600 dark:text-zinc-300 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors cursor-pointer"
+          onClick={handleCopyCaption}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-600 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400 bg-zinc-100 hover:bg-zinc-200/80 dark:bg-zinc-800 dark:hover:bg-zinc-700/80 px-3 py-1.5 rounded-xl transition-colors shrink-0 cursor-pointer self-start"
+          title="Copy Caption"
         >
-          {copiedTitle ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
-          <span>{copiedTitle ? 'Copied!' : 'Copy Caption'}</span>
+          {copiedCaption ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
+          <span>{copiedCaption ? 'Copied' : 'Copy Caption'}</span>
         </button>
       </div>
 
-      {/* Main Grid: Media Preview + Download Options */}
+      {/* Media Preview & Download Controls */}
       <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
-        {/* Left Column: Media Preview */}
-        <div className="md:col-span-5 flex flex-col items-center">
-          <div className="relative w-full max-w-[280px] rounded-2xl overflow-hidden shadow-lg border border-zinc-200 dark:border-zinc-800 bg-black aspect-[9/16] flex items-center justify-center group">
-            <img
-              src={result.cover}
-              alt={result.title}
-              className="w-full h-full object-cover"
-              crossOrigin="anonymous"
+        {/* Interactive Responsive Video Player Preview */}
+        <div className="md:col-span-5 relative rounded-2xl overflow-hidden bg-black shadow-lg border border-zinc-200 dark:border-zinc-800 aspect-[9/16] max-h-[460px] mx-auto w-full max-w-[280px]">
+          {isPlayingVideo ? (
+            <iframe
+              src={`https://www.instagram.com/p/${result.id}/embed/`}
+              title={result.title}
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              className="w-full h-full border-0"
             />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex flex-col justify-end p-4 text-white">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-6 h-6 rounded-full bg-gradient-to-tr from-amber-500 to-rose-600 flex items-center justify-center text-[10px] font-bold">
-                  {result.author.name.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-xs font-bold truncate">@{result.author.username}</span>
+          ) : (
+            <div className="relative w-full h-full group cursor-pointer" onClick={() => setIsPlayingVideo(true)}>
+              <img
+                src={result.cover}
+                alt={result.title}
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                crossOrigin="anonymous"
+              />
+              <div className="absolute inset-0 bg-black/35 flex items-center justify-center group-hover:bg-black/50 transition-colors">
+                <button
+                  id="play-video-preview-btn"
+                  className="w-14 h-14 rounded-full bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 text-white flex items-center justify-center shadow-xl hover:scale-110 active:scale-95 transition-all cursor-pointer"
+                  title="Click to Play Reel"
+                >
+                  <Play className="w-6 h-6 fill-white translate-x-0.5" />
+                </button>
               </div>
-              <p className="text-[11px] text-zinc-300 line-clamp-2">{result.title}</p>
+
+              <span className="absolute bottom-2.5 left-2.5 inline-flex items-center gap-1 text-[10px] font-semibold text-white bg-black/70 backdrop-blur-md px-2 py-1 rounded-lg">
+                <Play className="w-3 h-3 fill-white" />
+                <span>Click to Play Reel</span>
+              </span>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Right Column: Download Options */}
+        {/* Quality Selector & Direct Download Options */}
         <div className="md:col-span-7 space-y-4">
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-white line-clamp-2">
-              {result.title}
-            </h2>
-            <div className="flex items-center gap-2 mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              <span>By {result.author.name}</span>
-              <span>•</span>
-              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">Direct File Download</span>
-            </div>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-1.5">
+              <Film className="w-4 h-4 text-rose-500" />
+              <span>Select Download Quality:</span>
+            </h3>
+            <span className="text-xs text-zinc-400">Direct to Downloads</span>
           </div>
 
-          {/* Download Options List */}
-          <div className="space-y-2.5 pt-2">
-            <div className="text-xs font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-              Select Download Format:
-            </div>
-
-            {result.downloads.map((opt) => {
-              const isDownloading = downloadingId === opt.id;
-              const isSuccess = downloadSuccessId === opt.id;
+          {/* List of Formats */}
+          <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+            {result.downloads.map((option) => {
+              const isSelected = selectedDownloadId === option.id;
+              const isDownloading = downloadingId === option.id;
+              const isSuccess = downloadSuccessId === option.id;
 
               return (
                 <div
-                  key={opt.id}
-                  className={`flex items-center justify-between p-3.5 rounded-2xl border transition-all ${
-                    opt.recommend
-                      ? 'bg-rose-50/50 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60 shadow-sm'
-                      : 'bg-zinc-50 dark:bg-zinc-800/40 border-zinc-200/80 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700'
+                  key={option.id}
+                  onClick={() => setSelectedDownloadId(option.id)}
+                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                    isSelected
+                      ? 'border-rose-500 bg-rose-50/50 dark:bg-rose-950/20 ring-2 ring-rose-500/20'
+                      : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/40'
                   }`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className={`p-2.5 rounded-xl ${
-                        opt.type === 'video'
-                          ? 'bg-rose-100 dark:bg-rose-900/40 text-rose-600 dark:text-rose-400'
-                          : opt.type === 'audio'
-                          ? 'bg-purple-100 dark:bg-purple-900/40 text-purple-600 dark:text-purple-400'
-                          : 'bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-400'
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                        option.type === 'audio'
+                          ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400'
+                          : option.type === 'thumbnail' || option.type === 'photo'
+                          ? 'bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400'
+                          : 'bg-rose-100 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400'
                       }`}
                     >
-                      {opt.type === 'video' ? (
-                        <Film className="w-4 h-4" />
-                      ) : opt.type === 'audio' ? (
-                        <Music className="w-4 h-4" />
+                      {option.type === 'audio' ? (
+                        <FileAudio className="w-4 h-4" />
+                      ) : option.type === 'thumbnail' || option.type === 'photo' ? (
+                        <ImageIcon className="w-4 h-4" />
                       ) : (
-                        <Image className="w-4 h-4" />
+                        <FileVideo className="w-4 h-4" />
                       )}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100">
-                          {opt.label}
+
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-xs sm:text-sm text-zinc-900 dark:text-white truncate">
+                          {option.label}
                         </span>
-                        {opt.badge && (
+                        {option.badge && (
                           <span
                             className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                              opt.recommend
-                                ? 'bg-rose-500 text-white'
+                              option.recommend
+                                ? 'bg-gradient-to-r from-rose-500 to-purple-600 text-white'
                                 : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
                             }`}
                           >
-                            {opt.badge}
+                            {option.badge}
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
-                        {opt.description}
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                        {option.description}
                       </p>
                     </div>
                   </div>
 
                   <button
-                    onClick={() => handleDownload(opt)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleTriggerDownload(option);
+                    }}
                     disabled={isDownloading}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
                       isSuccess
                         ? 'bg-emerald-500 text-white'
-                        : opt.recommend
+                        : option.recommend
                         ? 'bg-gradient-to-r from-rose-500 via-purple-600 to-amber-500 hover:opacity-90 text-white shadow-sm shadow-rose-500/25'
                         : 'bg-white dark:bg-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-600 text-zinc-800 dark:text-zinc-100 border border-zinc-200 dark:border-zinc-600'
                     }`}
                   >
                     {isDownloading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     ) : isSuccess ? (
                       <>
-                        <Check className="w-4 h-4" />
+                        <Check className="w-3.5 h-3.5" />
                         <span>Saved</span>
                       </>
                     ) : (
                       <>
-                        <Download className="w-4 h-4" />
+                        <Download className="w-3.5 h-3.5" />
                         <span>Save</span>
                       </>
                     )}
@@ -249,31 +315,62 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
             })}
           </div>
 
-          {/* Custom Filename Field */}
-          <div className="pt-2">
-            <div className="flex items-center justify-between text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1.5">
-              <span>Save File As:</span>
+          {/* Filename Customization & Presets */}
+          <div className="space-y-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-semibold text-zinc-700 dark:text-zinc-300 flex items-center gap-1">
+                <Tag className="w-3.5 h-3.5 text-zinc-400" />
+                <span>Custom Filename:</span>
+              </span>
               <button
                 type="button"
-                onClick={handleResetFilename}
+                onClick={() => setCustomFilename(presetCreatorCaption)}
                 className="text-rose-500 hover:underline flex items-center gap-1 cursor-pointer text-[11px]"
               >
                 <RotateCcw className="w-3 h-3" /> Reset
               </button>
             </div>
+
             <input
               type="text"
               value={customFilename}
               onChange={(e) => setCustomFilename(e.target.value)}
-              className="w-full text-xs sm:text-sm px-3.5 py-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-rose-500"
+              className="w-full text-xs sm:text-sm px-3.5 py-2 rounded-xl bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 focus:outline-none focus:border-rose-500"
               placeholder="Enter custom file name"
             />
+
+            {/* Quick Presets */}
+            <div className="flex items-center gap-1.5 flex-wrap pt-1">
+              <span className="text-[10px] text-zinc-400">Presets:</span>
+              <button
+                type="button"
+                onClick={() => setCustomFilename(presetCreatorCaption)}
+                className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 cursor-pointer truncate max-w-[140px]"
+              >
+                Author + Title
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomFilename(presetCaptionOnly)}
+                className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 cursor-pointer truncate max-w-[120px]"
+              >
+                Title Only
+              </button>
+              <button
+                type="button"
+                onClick={() => setCustomFilename(presetCreatorId)}
+                className="text-[10px] px-2 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 cursor-pointer truncate max-w-[120px]"
+              >
+                Author + ID
+              </button>
+            </div>
           </div>
 
-          {/* Error message notification banner if any */}
+          {/* Error Banner */}
           {downloadError && (
             <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 text-xs flex items-center gap-2">
-              <span>⚠️ {downloadError}</span>
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span>{downloadError}</span>
             </div>
           )}
         </div>
