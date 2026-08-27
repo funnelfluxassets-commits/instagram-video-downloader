@@ -599,6 +599,29 @@ app.get('/api/proxy-download', async (req, res) => {
       return res.status(500).json({ error: 'Failed to generate media file.' });
     }
 
+    if (!isAudio) {
+      const fixedFile = path.join('/tmp', `${tempFileId}_play.mp4`);
+      try {
+        await execFileAsync(ffmpegBin, [
+          '-y',
+          '-i', actualFile,
+          '-c:v', 'copy',
+          '-tag:v', 'hvc1',
+          '-c:a', 'aac',
+          '-b:a', '192k',
+          '-movflags', '+faststart',
+          fixedFile,
+        ], { timeout: 20000 });
+
+        if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
+          try { fs.unlinkSync(actualFile); } catch {}
+          actualFile = fixedFile;
+        }
+      } catch (ffErr: any) {
+        console.warn('[ffmpeg] fast remux note:', ffErr?.message);
+      }
+    }
+
     const stat = fs.statSync(actualFile);
     if (stat.size === 0) {
       try { fs.unlinkSync(actualFile); } catch {}

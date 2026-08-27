@@ -221,7 +221,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
             <span className="text-xs text-zinc-400">Direct to Downloads</span>
           </div>
 
-          {/* List of Formats with Consistent Card Sizing & Zero Height Shifts */}
+          {/* List of Formats with 100% Identical Card Height & Clean Layout */}
           <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
             {result.downloads.map((option) => {
               const isSelected = selectedDownloadId === option.id;
@@ -232,7 +232,7 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
                 <div
                   key={option.id}
                   onClick={() => setSelectedDownloadId(option.id)}
-                  className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 min-h-[72px] ${
+                  className={`px-3.5 py-3 sm:px-4 sm:py-3.5 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 h-[72px] sm:h-[76px] ${
                     isSelected
                       ? 'border-rose-500 bg-rose-50/50 dark:bg-rose-950/20 ring-2 ring-rose-500/20'
                       : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/40'
@@ -257,20 +257,20 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
                       )}
                     </div>
 
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
+                    <div className="min-w-0 flex-1 flex flex-col justify-center">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         <span className="font-bold text-xs sm:text-sm text-zinc-900 dark:text-white truncate">
-                          {option.label}
+                          {option.quality === '1080' ? '1080p Full HD' : option.quality === '720' ? '720p HD' : option.label}
                         </span>
                         {option.badge && (
                           <span
-                            className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
+                            className={`text-[9px] sm:text-[10px] font-extrabold px-1.5 sm:px-2 py-0.5 rounded-full shrink-0 ${
                               option.recommend
                                 ? 'bg-gradient-to-r from-rose-500 to-purple-600 text-white'
                                 : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300'
                             }`}
                           >
-                            {option.badge}
+                            {option.recommend ? 'RECOMMENDED' : option.badge}
                           </span>
                         )}
                       </div>
