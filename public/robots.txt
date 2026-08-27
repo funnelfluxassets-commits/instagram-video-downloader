@@ -23,4 +23,4 @@ Allow: /
 User-agent: CCBot
 Allow: /
 
-Sitemap: https://instagram-video-downloader.funnelfluxassets.com/sitemap.xml
+Sitemap: https://instadownloader.funnelfluxassets.com/sitemap.xml

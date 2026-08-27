@@ -177,16 +177,24 @@ export const App: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white/50 dark:bg-zinc-950/50 py-8 px-4 text-center text-xs text-zinc-500 dark:text-zinc-400">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-zinc-800 dark:text-zinc-200">InstaDownloader</span>
-            <span>•</span>
-            <span>Zero Watermarks • 100% Free</span>
+      <footer className="border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white/50 dark:bg-zinc-950/50 py-8 px-4 text-xs text-zinc-500 dark:text-zinc-400">
+        <div className="max-w-7xl mx-auto space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-zinc-800 dark:text-zinc-200">InstaDownloader</span>
+              <span>•</span>
+              <span>Zero Watermarks • 100% Free</span>
+            </div>
+            <p className="flex items-center gap-1">
+              Built with <Heart className="w-3.5 h-3.5 text-rose-500 fill-current" /> for content creators
+            </p>
           </div>
-          <p className="flex items-center gap-1">
-            Built with <Heart className="w-3.5 h-3.5 text-rose-500 fill-current" /> for content creators
-          </p>
+
+          <div className="pt-4 border-t border-zinc-200/50 dark:border-zinc-800/50 text-[11px] text-zinc-400 dark:text-zinc-500 leading-relaxed text-center sm:text-left">
+            <p>
+              <strong>Disclaimer:</strong> InstaDownloader is an independent utility tool and is not affiliated, associated, authorized, endorsed by, or in any way officially connected with Instagram, Meta Platforms, Inc., or any of their subsidiaries or affiliates. The official Instagram website can be found at <a href="https://www.instagram.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-zinc-600 dark:hover:text-zinc-300">instagram.com</a>. The name "Instagram" as well as related names, marks, emblems, and images are registered trademarks of their respective owners.
+            </p>
+          </div>
         </div>
       </footer>
 
