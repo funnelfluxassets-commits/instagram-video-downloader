@@ -548,6 +548,7 @@ app.get('/api/proxy-download', async (req, res) => {
         '--ffmpeg-location', ffmpegBin,
         '-o', tmpFile,
         '--no-playlist',
+        '--js-runtimes', 'node',
         ...cookieArgs,
         targetUrl,
       ];
@@ -559,13 +560,13 @@ app.get('/api/proxy-download', async (req, res) => {
 
       const h264Vid = `bestvideo[vcodec^=avc][height<=${maxHeight}][width<=${maxWidth}]`;
       const fallbackVid = `bestvideo[height<=${maxHeight}][width<=${maxWidth}]`;
-      const format = `${h264Vid}+bestaudio[acodec^=mp4a]/${h264Vid}+bestaudio/${fallbackVid}+bestaudio[acodec^=mp4a]/${fallbackVid}+bestaudio/best[height<=${maxHeight}]/best`;
+      const format = `${h264Vid}+bestaudio[acodec^=mp4a]/${h264Vid}+bestaudio/${fallbackVid}+bestaudio/best`;
 
       ytdlpArgs = [
         '-f', format,
         '--merge-output-format', 'mp4',
         '--ffmpeg-location', ffmpegBin,
-        '--postprocessor-args', 'ffmpeg:-c:v copy -c:a aac -b:a 192k -movflags +faststart',
+        '--postprocessor-args', 'ffmpeg:-movflags +faststart',
         '-o', tmpFile,
         '--no-playlist',
         '--js-runtimes', 'node',
@@ -576,7 +577,7 @@ app.get('/api/proxy-download', async (req, res) => {
 
     console.log('[yt-dlp] Downloading Instagram media:', ytdlpArgs.join(' '));
     try {
-      await execFileAsync(ytdlpBin, ytdlpArgs, { timeout: 50000 });
+      await execFileAsync(ytdlpBin, ytdlpArgs, { timeout: 45000 });
     } catch (execErr: any) {
       const errDetail = (execErr?.stderr || execErr?.message || 'unknown error').slice(0, 300);
       console.error('[yt-dlp] Exec error:', errDetail);
@@ -588,59 +589,19 @@ app.get('/api/proxy-download', async (req, res) => {
       return res.status(500).json({ error: userFriendlyMsg, detail: errDetail });
     }
 
-    if (!fs.existsSync(tmpFile)) {
+    let actualFile = tmpFile;
+    if (!fs.existsSync(actualFile)) {
+      if (fs.existsSync(`${tmpFile}.mp3`)) actualFile = `${tmpFile}.mp3`;
+      else if (fs.existsSync(`${tmpFile}.mp4`)) actualFile = `${tmpFile}.mp4`;
+    }
+
+    if (!fs.existsSync(actualFile)) {
       return res.status(500).json({ error: 'Failed to generate media file.' });
     }
 
-    let finalFile = tmpFile;
-    if (!isAudio) {
-      const fixedFile = path.join('/tmp', `${tempFileId}_qt.mp4`);
-      try {
-        console.log('[ffmpeg] Transcoding to universal H.264 + AAC + yuv420p for QuickTime/iOS...');
-        await execFileAsync(ffmpegBin, [
-          '-y',
-          '-i', tmpFile,
-          '-c:v', 'libx264',
-          '-preset', 'ultrafast',
-          '-crf', '20',
-          '-pix_fmt', 'yuv420p',
-          '-c:a', 'aac',
-          '-b:a', '192k',
-          '-movflags', '+faststart',
-          fixedFile,
-        ], { timeout: 45000 });
-
-        if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
-          try { fs.unlinkSync(tmpFile); } catch {}
-          finalFile = fixedFile;
-          console.log('[ffmpeg] Universal H.264/AAC transcode successful');
-        }
-      } catch (ffErr: any) {
-        console.warn('[ffmpeg] Transcode warning, trying direct remux:', ffErr?.message);
-        try {
-          await execFileAsync(ffmpegBin, [
-            '-y',
-            '-i', tmpFile,
-            '-c:v', 'copy',
-            '-c:a', 'aac',
-            '-b:a', '192k',
-            '-movflags', '+faststart',
-            fixedFile,
-          ], { timeout: 35000 });
-
-          if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
-            try { fs.unlinkSync(tmpFile); } catch {}
-            finalFile = fixedFile;
-          }
-        } catch (remuxErr: any) {
-          console.warn('[ffmpeg] Remux failed, serving raw file:', remuxErr?.message);
-        }
-      }
-    }
-
-    const stat = fs.statSync(finalFile);
+    const stat = fs.statSync(actualFile);
     if (stat.size === 0) {
-      try { fs.unlinkSync(finalFile); } catch {}
+      try { fs.unlinkSync(actualFile); } catch {}
       return res.status(500).json({ error: 'Generated file is empty.' });
     }
 
@@ -650,12 +611,12 @@ app.get('/api/proxy-download', async (req, res) => {
     res.setHeader('Content-Length', String(stat.size));
     res.setHeader('Cache-Control', 'no-cache');
 
-    const readStream = fs.createReadStream(finalFile);
+    const readStream = fs.createReadStream(actualFile);
     readStream.pipe(res);
 
     const cleanup = () => {
       try {
-        if (fs.existsSync(finalFile)) fs.unlinkSync(finalFile);
+        if (fs.existsSync(actualFile)) fs.unlinkSync(actualFile);
         if (fs.existsSync(tmpFile)) fs.unlinkSync(tmpFile);
       } catch {}
     };

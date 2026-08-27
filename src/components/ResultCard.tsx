@@ -11,7 +11,6 @@ import {
   AlertCircle,
   RotateCcw,
   Tag,
-  Smartphone,
   CheckCircle2,
   Loader2,
   Instagram,
@@ -94,7 +93,6 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
       const safeTitle = `${baseName}${suffix}`;
       const ext = option.extension || (option.type === 'audio' ? 'mp3' : option.type === 'thumbnail' || option.type === 'photo' ? 'jpg' : 'mp4');
 
-      // Direct Stream Download straight to Downloads folder
       let endpoint = '';
       if (option.type === 'thumbnail' || option.type === 'photo') {
         endpoint = `/api/proxy-download?url=${encodeURIComponent(option.url || result.cover)}&filename=${encodeURIComponent(safeTitle)}&ext=jpg&type=thumbnail`;
@@ -223,8 +221,8 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
             <span className="text-xs text-zinc-400">Direct to Downloads</span>
           </div>
 
-          {/* List of Formats */}
-          <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+          {/* List of Formats with Consistent Card Sizing & Zero Height Shifts */}
+          <div className="space-y-2.5 max-h-[340px] overflow-y-auto pr-1">
             {result.downloads.map((option) => {
               const isSelected = selectedDownloadId === option.id;
               const isDownloading = downloadingId === option.id;
@@ -234,15 +232,15 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
                 <div
                   key={option.id}
                   onClick={() => setSelectedDownloadId(option.id)}
-                  className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                  className={`p-3.5 sm:p-4 rounded-2xl border transition-all cursor-pointer flex items-center justify-between gap-3 min-h-[72px] ${
                     isSelected
                       ? 'border-rose-500 bg-rose-50/50 dark:bg-rose-950/20 ring-2 ring-rose-500/20'
                       : 'border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700 bg-zinc-50/50 dark:bg-zinc-800/40'
                   }`}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     <div
-                      className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                         option.type === 'audio'
                           ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400'
                           : option.type === 'thumbnail' || option.type === 'photo'
@@ -251,15 +249,15 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
                       }`}
                     >
                       {option.type === 'audio' ? (
-                        <FileAudio className="w-4 h-4" />
+                        <FileAudio className="w-4.5 h-4.5" />
                       ) : option.type === 'thumbnail' || option.type === 'photo' ? (
-                        <ImageIcon className="w-4 h-4" />
+                        <ImageIcon className="w-4.5 h-4.5" />
                       ) : (
-                        <FileVideo className="w-4 h-4" />
+                        <FileVideo className="w-4.5 h-4.5" />
                       )}
                     </div>
 
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-xs sm:text-sm text-zinc-900 dark:text-white truncate">
                           {option.label}
@@ -276,19 +274,20 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">
+                      <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
                         {option.description}
                       </p>
                     </div>
                   </div>
 
                   <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       handleTriggerDownload(option);
                     }}
                     disabled={isDownloading}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                    className={`min-w-[84px] sm:min-w-[92px] h-9 sm:h-10 px-3.5 rounded-xl text-xs font-bold transition-all shrink-0 flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-wait ${
                       isSuccess
                         ? 'bg-emerald-500 text-white'
                         : option.recommend
@@ -297,7 +296,10 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
                     }`}
                   >
                     {isDownloading ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Saving...</span>
+                      </>
                     ) : isSuccess ? (
                       <>
                         <Check className="w-3.5 h-3.5" />
