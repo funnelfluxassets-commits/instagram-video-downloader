@@ -1,32 +1,31 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
   <defs>
-    <linearGradient id="instaGrad" x1="0%" y1="100%" x2="100%" y2="0%">
-      <stop offset="0%" stop-color="#FFD600"/>
-      <stop offset="25%" stop-color="#FF7A00"/>
-      <stop offset="50%" stop-color="#FF0069"/>
-      <stop offset="75%" stop-color="#D300C5"/>
-      <stop offset="100%" stop-color="#7638FA"/>
+    <!-- Sunset Rose-Purple-Amber Gradient -->
+    <linearGradient id="instaBrandGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#FF512F"/>
+      <stop offset="35%" stop-color="#DD2476"/>
+      <stop offset="70%" stop-color="#9A00E6"/>
+      <stop offset="100%" stop-color="#4A00E0"/>
     </linearGradient>
-    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#FF0069" stop-opacity="0.6"/>
-      <stop offset="100%" stop-color="#7638FA" stop-opacity="0"/>
+    <linearGradient id="sparkleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFE000"/>
+      <stop offset="100%" stop-color="#FF3E00"/>
     </linearGradient>
   </defs>
-  
-  <!-- Outer Rounded Squircle -->
-  <rect x="32" y="32" width="448" height="448" rx="112" fill="url(#instaGrad)"/>
-  
-  <!-- Inner White Border Squircle -->
-  <rect x="96" y="96" width="320" height="320" rx="80" fill="none" stroke="#ffffff" stroke-width="28" stroke-linecap="round"/>
-  
-  <!-- Camera Lens / Center Circle -->
-  <circle cx="256" cy="256" r="76" fill="none" stroke="#ffffff" stroke-width="28"/>
-  
-  <!-- Camera Flash Dot -->
-  <circle cx="348" cy="164" r="20" fill="#ffffff"/>
-  
-  <!-- Download Arrow Overlay -->
-  <g transform="translate(256, 256) scale(0.65) translate(-256, -256)">
-    <path d="M256 160 V330 M190 264 L256 330 L322 264" fill="none" stroke="#ffffff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
-  </g>
+
+  <!-- Outer Rounded Shield / Squircle -->
+  <rect x="32" y="32" width="448" height="448" rx="128" fill="url(#instaBrandGrad)"/>
+
+  <!-- Stylized Geometric Downloader Core -->
+  <!-- Top Arc / Media Disc -->
+  <path d="M160 176 C160 120 352 120 352 176" fill="none" stroke="#ffffff" stroke-width="32" stroke-linecap="round"/>
+
+  <!-- Dynamic Center Arrow Stem & Head -->
+  <path d="M256 160 V340 M184 272 L256 344 L328 272" fill="none" stroke="#ffffff" stroke-width="36" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Bottom Catch Tray Arc -->
+  <path d="M140 340 C140 400 372 400 372 340" fill="none" stroke="#ffffff" stroke-width="32" stroke-linecap="round"/>
+
+  <!-- Top-Right Unique Sparkle Star (4-point Diamond Star) -->
+  <path d="M380 100 Q380 130 410 130 Q380 130 380 160 Q380 130 350 130 Q380 130 380 100 Z" fill="url(#sparkleGrad)"/>
 </svg>
