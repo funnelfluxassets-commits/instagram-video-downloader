@@ -596,45 +596,44 @@ app.get('/api/proxy-download', async (req, res) => {
     if (!isAudio) {
       const fixedFile = path.join('/tmp', `${tempFileId}_qt.mp4`);
       try {
-        console.log('[ffmpeg] Post-processing for QuickTime/iOS compatibility...');
+        console.log('[ffmpeg] Transcoding to universal H.264 + AAC + yuv420p for QuickTime/iOS...');
         await execFileAsync(ffmpegBin, [
           '-y',
           '-i', tmpFile,
-          '-c:v', 'copy',
+          '-c:v', 'libx264',
+          '-preset', 'ultrafast',
+          '-crf', '20',
+          '-pix_fmt', 'yuv420p',
           '-c:a', 'aac',
           '-b:a', '192k',
           '-movflags', '+faststart',
           fixedFile,
-        ], { timeout: 35000 });
+        ], { timeout: 45000 });
 
         if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
           try { fs.unlinkSync(tmpFile); } catch {}
           finalFile = fixedFile;
-          console.log('[ffmpeg] Post-processing successful');
+          console.log('[ffmpeg] Universal H.264/AAC transcode successful');
         }
       } catch (ffErr: any) {
-        console.warn('[ffmpeg] Direct copy failed, encoding to universal H.264:', ffErr?.message);
+        console.warn('[ffmpeg] Transcode warning, trying direct remux:', ffErr?.message);
         try {
           await execFileAsync(ffmpegBin, [
             '-y',
             '-i', tmpFile,
-            '-c:v', 'libx264',
-            '-preset', 'ultrafast',
-            '-crf', '22',
-            '-pix_fmt', 'yuv420p',
+            '-c:v', 'copy',
             '-c:a', 'aac',
             '-b:a', '192k',
             '-movflags', '+faststart',
             fixedFile,
-          ], { timeout: 45000 });
+          ], { timeout: 35000 });
 
           if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
             try { fs.unlinkSync(tmpFile); } catch {}
             finalFile = fixedFile;
-            console.log('[ffmpeg] Universal H.264 encode successful');
           }
-        } catch (encErr: any) {
-          console.warn('[ffmpeg] Fallback encode warning:', encErr?.message);
+        } catch (remuxErr: any) {
+          console.warn('[ffmpeg] Remux failed, serving raw file:', remuxErr?.message);
         }
       }
     }
