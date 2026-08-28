@@ -164,14 +164,13 @@ function ensureCookiesFile(): string[] {
   if (!cookiesEnv) return [];
 
   try {
-    if (!cookiesWritten) {
+    if (!fs.existsSync(COOKIES_PATH) || fs.statSync(COOKIES_PATH).size === 0) {
       let content = cookiesEnv;
       if (!content.includes('\n')) {
         content = content.split('\\n').join('\n');
       }
       fs.writeFileSync(COOKIES_PATH, content, 'utf-8');
-      cookiesWritten = true;
-      console.log('[yt-dlp] Instagram cookies configured');
+      console.log('[yt-dlp] Instagram cookies written to /tmp/ig-cookies.txt');
     }
     return ['--cookies', COOKIES_PATH];
   } catch (err: any) {
@@ -332,6 +331,10 @@ async function extractInstagramMedia(targetUrl: string) {
     '--dump-json',
     '--no-playlist',
     '--no-warnings',
+    '--add-header', 'User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+    '--add-header', 'Referer:https://www.instagram.com/',
+    '--add-header', 'Accept-Language:en-US,en;q=0.9',
+    '--js-runtimes', 'node',
     ...cookieArgs,
     cleanUrl,
   ];
@@ -546,6 +549,9 @@ app.get('/api/proxy-download', async (req, res) => {
         '--audio-format', 'mp3',
         '--audio-quality', '0',
         '--ffmpeg-location', ffmpegBin,
+        '--add-header', 'User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        '--add-header', 'Referer:https://www.instagram.com/',
+        '--add-header', 'Accept-Language:en-US,en;q=0.9',
         '-o', tmpFile,
         '--no-playlist',
         '--js-runtimes', 'node',
@@ -558,8 +564,6 @@ app.get('/api/proxy-download', async (req, res) => {
       let maxHeight = isShortsVideo ? (qNum === 720 ? 1280 : 1920) : (qNum === 720 ? 720 : 1080);
       let maxWidth = isShortsVideo ? (qNum === 720 ? 720 : 1080) : (qNum === 720 ? 1280 : 1920);
 
-      const h264Vid = `bestvideo[vcodec^=avc][height<=${maxHeight}][width<=${maxWidth}]`;
-      const fallbackVid = `bestvideo[height<=${maxHeight}][width<=${maxWidth}]`;
       const format = `best[vcodec^=avc1][height<=${maxHeight}]/best[vcodec^=avc][height<=${maxHeight}]/bestvideo[vcodec^=avc1][height<=${maxHeight}]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=avc][height<=${maxHeight}]+bestaudio/best[height<=${maxHeight}]/best`;
 
       ytdlpArgs = [
@@ -567,6 +571,9 @@ app.get('/api/proxy-download', async (req, res) => {
         '--merge-output-format', 'mp4',
         '--ffmpeg-location', ffmpegBin,
         '--postprocessor-args', 'ffmpeg:-movflags +faststart',
+        '--add-header', 'User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        '--add-header', 'Referer:https://www.instagram.com/',
+        '--add-header', 'Accept-Language:en-US,en;q=0.9',
         '-o', tmpFile,
         '--no-playlist',
         '--js-runtimes', 'node',
