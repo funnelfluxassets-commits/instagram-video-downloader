@@ -699,13 +699,37 @@ app.post('/api/auth/register', async (req, res) => {
     }
     inMemoryUsers.set(cleanEmail, userData);
 
-    if (isNewUser) {
-      sendSignupNotification({ appName: 'InstaDownloader', email: cleanEmail, name: cleanName, req }).catch(() => {});
-    }
+    sendSignupNotification({ appName: 'InstaDownloader', email: cleanEmail, name: cleanName, req }).catch((err) => {
+      console.warn('[Notification] Send error:', err?.message);
+    });
 
     return res.json({ success: true, user: { email: cleanEmail, name: cleanName, createdAt: now } });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: 'Failed to process account.' });
+  }
+});
+
+// Diagnostic endpoint to test email notifications directly
+app.get('/api/test-notify', async (req, res) => {
+  const hasResend = !!process.env.RESEND_API_KEY;
+  const targetEmail = NOTIFICATION_EMAIL;
+  try {
+    await sendSignupNotification({
+      appName: 'InstaDownloader',
+      email: 'test-user@example.com',
+      name: 'Test Creator',
+      req,
+    });
+    return res.json({
+      success: true,
+      hasResendApiKey: hasResend,
+      notificationEmail: targetEmail,
+      message: hasResend
+        ? `Test notification dispatched to ${targetEmail}`
+        : 'RESEND_API_KEY is not set in Environment Variables.',
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message });
   }
 });
 
