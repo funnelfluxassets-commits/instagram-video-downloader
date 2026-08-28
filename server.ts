@@ -602,23 +602,44 @@ app.get('/api/proxy-download', async (req, res) => {
     if (!isAudio) {
       const fixedFile = path.join('/tmp', `${tempFileId}_play.mp4`);
       try {
+        console.log('[ffmpeg] Transcoding Instagram media to universal H.264 (yuv420p) + AAC for QuickTime...');
         await execFileAsync(ffmpegBin, [
           '-y',
           '-i', actualFile,
-          '-c:v', 'copy',
-          '-tag:v', 'hvc1',
+          '-c:v', 'libx264',
+          '-preset', 'ultrafast',
+          '-crf', '22',
+          '-pix_fmt', 'yuv420p',
           '-c:a', 'aac',
           '-b:a', '192k',
           '-movflags', '+faststart',
           fixedFile,
-        ], { timeout: 20000 });
+        ], { timeout: 35000 });
 
         if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
           try { fs.unlinkSync(actualFile); } catch {}
           actualFile = fixedFile;
+          console.log('[ffmpeg] Transcode successful, output size:', fs.statSync(actualFile).size);
         }
       } catch (ffErr: any) {
-        console.warn('[ffmpeg] fast remux note:', ffErr?.message);
+        console.warn('[ffmpeg] libx264 transcode warning, attempting safe copy:', ffErr?.message);
+        try {
+          await execFileAsync(ffmpegBin, [
+            '-y',
+            '-i', actualFile,
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-movflags', '+faststart',
+            fixedFile,
+          ], { timeout: 20000 });
+          if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
+            try { fs.unlinkSync(actualFile); } catch {}
+            actualFile = fixedFile;
+          }
+        } catch (copyErr: any) {
+          console.warn('[ffmpeg] copy fallback failed:', copyErr?.message);
+        }
       }
     }
 
