@@ -560,7 +560,7 @@ app.get('/api/proxy-download', async (req, res) => {
 
       const h264Vid = `bestvideo[vcodec^=avc][height<=${maxHeight}][width<=${maxWidth}]`;
       const fallbackVid = `bestvideo[height<=${maxHeight}][width<=${maxWidth}]`;
-      const format = `${h264Vid}+bestaudio[acodec^=mp4a]/${h264Vid}+bestaudio/${fallbackVid}+bestaudio/best`;
+      const format = `best[vcodec^=avc1][height<=${maxHeight}]/best[vcodec^=avc][height<=${maxHeight}]/bestvideo[vcodec^=avc1][height<=${maxHeight}]+bestaudio[acodec^=mp4a]/bestvideo[vcodec^=avc][height<=${maxHeight}]+bestaudio/best[height<=${maxHeight}]/best`;
 
       ytdlpArgs = [
         '-f', format,
@@ -602,22 +602,45 @@ app.get('/api/proxy-download', async (req, res) => {
     if (!isAudio) {
       const fixedFile = path.join('/tmp', `${tempFileId}_qt.mp4`);
       try {
+        console.log('[ffmpeg] Transcoding to universal QuickTime H.264 (yuv420p) + AAC...');
         await execFileAsync(ffmpegBin, [
           '-y',
           '-i', actualFile,
-          '-c:v', 'copy',
+          '-c:v', 'libx264',
+          '-preset', 'ultrafast',
+          '-tune', 'fastdecode',
+          '-crf', '22',
+          '-pix_fmt', 'yuv420p',
           '-c:a', 'aac',
           '-b:a', '192k',
           '-movflags', '+faststart',
           fixedFile,
-        ], { timeout: 15000 });
+        ], { timeout: 45000 });
 
         if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
           try { fs.unlinkSync(actualFile); } catch {}
           actualFile = fixedFile;
+          console.log('[ffmpeg] Universal QuickTime H.264 encode successful');
         }
       } catch (ffErr: any) {
-        console.warn('[ffmpeg] Fast remux note:', ffErr?.message);
+        console.warn('[ffmpeg] libx264 conversion note, attempting direct copy:', ffErr?.message);
+        try {
+          await execFileAsync(ffmpegBin, [
+            '-y',
+            '-i', actualFile,
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            '-b:a', '192k',
+            '-movflags', '+faststart',
+            fixedFile,
+          ], { timeout: 15000 });
+          if (fs.existsSync(fixedFile) && fs.statSync(fixedFile).size > 0) {
+            try { fs.unlinkSync(actualFile); } catch {}
+            actualFile = fixedFile;
+          }
+        } catch (copyErr: any) {
+          console.warn('[ffmpeg] copy fallback note:', copyErr?.message);
+        }
       }
     }
 
