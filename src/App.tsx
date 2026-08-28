@@ -180,10 +180,19 @@ export const App: React.FC = () => {
       <footer className="border-t border-zinc-200/80 dark:border-zinc-800/80 bg-white/50 dark:bg-zinc-950/50 py-8 px-4 text-xs text-zinc-500 dark:text-zinc-400">
         <div className="max-w-7xl mx-auto space-y-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-zinc-800 dark:text-zinc-200">InstaDownloader</span>
-              <span>•</span>
-              <span>Zero Watermarks • 100% Free</span>
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-amber-500 via-rose-500 to-purple-600 p-[1.5px] shadow-sm flex items-center justify-center">
+                <div className="w-full h-full bg-zinc-950 rounded-[6.5px] flex items-center justify-center p-1.5">
+                  <svg viewBox="0 0 24 24" className="w-full h-full text-rose-500 fill-none stroke-current" xmlns="http://www.w3.org/2000/svg" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 3v13M7 11l5 5 5-5" />
+                    <path d="M5 20h14" />
+                  </svg>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-1 sm:gap-1.5 whitespace-nowrap text-center">
+                <span className="font-bold text-xs sm:text-sm text-zinc-900 dark:text-white tracking-tight">InstaDownloader</span>
+                <span className="text-[11px] sm:text-xs text-zinc-400 dark:text-zinc-500 whitespace-nowrap">• Zero Watermarks • 100% Free</span>
+              </div>
             </div>
             <p className="flex items-center gap-1">
               Built with <Heart className="w-3.5 h-3.5 text-rose-500 fill-current" /> for content creators
