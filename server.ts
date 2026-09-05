@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import { Readable } from 'stream';
 import zlib from 'zlib';
 import { execFile, exec } from 'child_process';
 import util from 'util';
@@ -214,6 +215,66 @@ function parseInstagramUrl(inputUrl: string): { mediaId: string; isReel: boolean
   }
 }
 
+// ─── Free Public Embed Extractor (100% Free, no API keys, no cloud IP blocks) ─
+interface EmbedMediaData {
+  videoUrl: string | null;
+  coverUrl: string | null;
+  username: string;
+  caption: string;
+}
+
+async function extractFromEmbed(mediaId: string): Promise<EmbedMediaData | null> {
+  try {
+    const embedUrl = `https://www.instagram.com/p/${mediaId}/embed/captioned/`;
+    const res = await fetch(embedUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+      },
+    });
+
+    if (!res.ok) {
+      console.warn(`[embed-extractor] HTTP ${res.status} from Instagram embed`);
+      return null;
+    }
+
+    const html = await res.text();
+
+    let videoUrl: string | null = null;
+    const videoMatch = html.match(/video_url\\":\\"([^"]+)\\"/);
+    if (videoMatch) {
+      videoUrl = videoMatch[1].replace(/\\/g, '').replace(/u0026/g, '&');
+    }
+
+    let coverUrl: string | null = null;
+    const thumbMatch = html.match(/display_url\\":\\"([^"]+)\\"/);
+    if (thumbMatch) {
+      coverUrl = thumbMatch[1].replace(/\\/g, '').replace(/u0026/g, '&');
+    }
+
+    let username = 'Instagram Creator';
+    const userMatch = html.match(/class="UsernameText">([^<]+)</);
+    if (userMatch) {
+      username = userMatch[1].trim();
+    }
+
+    let caption = 'Instagram Video';
+    const captionMatch = html.match(/class="Caption"[^>]*>([\s\S]*?)<\/div>/);
+    if (captionMatch) {
+      caption = captionMatch[1].replace(/<[^>]+>/g, '').trim();
+    }
+
+    return { videoUrl, coverUrl, username, caption };
+  } catch (err: any) {
+    console.warn('[embed-extractor] Extraction error:', err?.message);
+    return null;
+  }
+}
+
 // ─── Signup Notification System ───────────────────────────────────────────────
 const NOTIFICATION_EMAIL = process.env.NOTIFICATION_EMAIL || 'funnelflux.assets@gmail.com';
 
@@ -323,43 +384,40 @@ async function extractInstagramMedia(targetUrl: string) {
   }
 
   const { mediaId, isReel, cleanUrl } = parsed;
-  const ytdlpBin = await ensureYtDlp();
-  const cookieArgs = ensureCookiesFile();
 
-  // Run yt-dlp dump JSON
-  const args = [
-    '--dump-json',
-    '--no-playlist',
-    '--no-warnings',
-    '--add-header', 'User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-    '--add-header', 'Referer:https://www.instagram.com/',
-    '--add-header', 'Accept-Language:en-US,en;q=0.9',
-    '--js-runtimes', 'node',
-    ...cookieArgs,
-    cleanUrl,
-  ];
+  // 1. Query instant embed extractor in background (free, fast, no IP blocks)
+  const embedPromise = extractFromEmbed(mediaId).catch(() => null);
 
-  let mediaInfo: any;
+  // 2. Try yt-dlp dump JSON
+  let mediaInfo: any = null;
   try {
-    const { stdout } = await execFileAsync(ytdlpBin, args, { timeout: 25000 });
+    const ytdlpBin = await ensureYtDlp();
+    const cookieArgs = ensureCookiesFile();
+    const args = [
+      '--dump-json',
+      '--no-playlist',
+      '--no-warnings',
+      '--add-header', 'User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      '--add-header', 'Referer:https://www.instagram.com/',
+      '--add-header', 'Accept-Language:en-US,en;q=0.9',
+      '--js-runtimes', 'node',
+      ...cookieArgs,
+      cleanUrl,
+    ];
+    const { stdout } = await execFileAsync(ytdlpBin, args, { timeout: 15000 });
     mediaInfo = JSON.parse(stdout.trim());
   } catch (err: any) {
     console.warn('[yt-dlp] Extraction fallback triggered:', err?.message);
-    // Fallback info if dump-json was blocked
-    mediaInfo = {
-      id: mediaId,
-      title: `Instagram ${isReel ? 'Reel' : 'Video'}`,
-      uploader: 'Instagram Creator',
-      thumbnail: `https://www.instagram.com/p/${mediaId}/media/?size=l`,
-      duration: 0,
-    };
   }
 
-  const title = mediaInfo.description || mediaInfo.title || (isReel ? 'Instagram Reel' : 'Instagram Video');
-  const cleanTitle = title.length > 80 ? title.substring(0, 80) + '...' : title;
-  const authorName = mediaInfo.uploader || mediaInfo.channel || 'Instagram Creator';
-  const authorUsername = mediaInfo.uploader_id || authorName.replace(/[^\w]/g, '').toLowerCase();
-  const coverUrl = mediaInfo.thumbnail || `https://www.instagram.com/p/${mediaId}/media/?size=l`;
+  const embedData = await embedPromise;
+
+  const rawTitle = mediaInfo?.description || mediaInfo?.title || embedData?.caption || (isReel ? 'Instagram Reel' : 'Instagram Video');
+  const cleanTitle = rawTitle.length > 80 ? rawTitle.substring(0, 80) + '...' : rawTitle;
+  const authorName = mediaInfo?.uploader || mediaInfo?.channel || embedData?.username || 'Instagram Creator';
+  const authorUsername = mediaInfo?.uploader_id || embedData?.username || authorName.replace(/[^\w]/g, '').toLowerCase();
+  const coverUrl = mediaInfo?.thumbnail || embedData?.coverUrl || `https://www.instagram.com/p/${mediaId}/media/?size=l`;
+  const directVideoUrl = embedData?.videoUrl || undefined;
 
   const downloads: any[] = [
     {
@@ -370,6 +428,7 @@ async function extractInstagramMedia(targetUrl: string) {
       badge: '1080p FULL HD',
       type: 'video',
       url: cleanUrl,
+      directUrl: directVideoUrl,
       extension: 'mp4',
       recommend: true,
     },
@@ -381,6 +440,7 @@ async function extractInstagramMedia(targetUrl: string) {
       badge: '720p HD',
       type: 'video',
       url: cleanUrl,
+      directUrl: directVideoUrl,
       extension: 'mp4',
       recommend: false,
     },
@@ -392,6 +452,7 @@ async function extractInstagramMedia(targetUrl: string) {
       badge: 'MP3 AUDIO',
       type: 'audio',
       url: cleanUrl,
+      directUrl: directVideoUrl,
       extension: 'mp3',
       recommend: false,
     },
@@ -488,7 +549,7 @@ app.post('/api/extract', async (req, res) => {
 
 app.get('/api/proxy-download', async (req, res) => {
   try {
-    const { url, id, quality, type, filename, ext } = req.query;
+    const { url, id, quality, type, filename, ext, directUrl } = req.query;
 
     const safeFilename = sanitizeFilename(typeof filename === 'string' ? filename : 'instagram_media');
     let fileExt = typeof ext === 'string' ? ext.replace('.', '').toLowerCase() : 'mp4';
@@ -510,14 +571,108 @@ app.get('/api/proxy-download', async (req, res) => {
       return res.end(Buffer.from(buffer));
     }
 
-    // ── 2. Video / Audio download via yt-dlp + FFmpeg ─────────────────────────
+    // ── 2. Video / Audio download ─────────────────────────────────────────────
     const targetUrl = typeof url === 'string' && url.trim() ? url.trim() : (typeof id === 'string' ? `https://www.instagram.com/reel/${id}/` : '');
     if (!targetUrl) return res.status(400).json({ error: 'Missing media URL.' });
 
+    const mediaId = (typeof id === 'string' && id.trim()) || parseInstagramUrl(targetUrl)?.mediaId || '';
     const isAudio = type === 'audio' || fileExt === 'mp3';
     const qualityStr = typeof quality === 'string' ? quality : '1080';
     if (isAudio) fileExt = 'mp3';
 
+    // ── Direct Embed Stream (Fast, 100% Free, bypasses cloud IP blocks) ───────
+    let directStreamUrl = typeof directUrl === 'string' && directUrl.startsWith('http') ? directUrl.trim() : null;
+    if (!directStreamUrl && mediaId) {
+      const embedInfo = await extractFromEmbed(mediaId);
+      if (embedInfo?.videoUrl) {
+        directStreamUrl = embedInfo.videoUrl;
+      }
+    }
+
+    // Direct Video Stream (Stream MP4 directly from Meta CDN)
+    if (directStreamUrl && !isAudio) {
+      try {
+        console.log('[proxy-download] Serving direct video stream from Instagram CDN');
+        const cdnRes = await fetch(directStreamUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+            'Referer': 'https://www.instagram.com/',
+          },
+        });
+
+        if (cdnRes.ok && cdnRes.body) {
+          const contentType = cdnRes.headers.get('content-type') || 'video/mp4';
+          const contentLength = cdnRes.headers.get('content-length');
+
+          res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.${fileExt}"`);
+          res.setHeader('Content-Type', contentType);
+          if (contentLength) res.setHeader('Content-Length', contentLength);
+          res.setHeader('Cache-Control', 'no-cache');
+
+          const stream = Readable.fromWeb(cdnRes.body as any);
+          return stream.pipe(res);
+        }
+      } catch (directErr: any) {
+        console.warn('[proxy-download] Direct video stream failed, trying fallback:', directErr?.message);
+      }
+    }
+
+    // Direct Audio Stream (Convert direct MP4 to MP3 via ffmpeg)
+    if (directStreamUrl && isAudio) {
+      try {
+        console.log('[proxy-download] Converting direct embed video to MP3 via ffmpeg');
+        const ffmpegBin = await ensureFfmpeg();
+        const tempFileId = `ig_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const tmpMp4 = path.join('/tmp', `${tempFileId}.mp4`);
+        const tmpMp3 = path.join('/tmp', `${tempFileId}.mp3`);
+
+        const cdnRes = await fetch(directStreamUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Referer': 'https://www.instagram.com/',
+          },
+        });
+
+        if (cdnRes.ok) {
+          const buffer = Buffer.from(await cdnRes.arrayBuffer());
+          fs.writeFileSync(tmpMp4, buffer);
+
+          await execFileAsync(ffmpegBin, [
+            '-i', tmpMp4,
+            '-vn',
+            '-acodec', 'libmp3lame',
+            '-b:a', '320k',
+            '-y',
+            tmpMp3,
+          ], { timeout: 30000 });
+
+          if (fs.existsSync(tmpMp3) && fs.statSync(tmpMp3).size > 0) {
+            const stat = fs.statSync(tmpMp3);
+            res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.mp3"`);
+            res.setHeader('Content-Type', 'audio/mpeg');
+            res.setHeader('Content-Length', String(stat.size));
+            res.setHeader('Cache-Control', 'no-cache');
+
+            const readStream = fs.createReadStream(tmpMp3);
+            readStream.pipe(res);
+
+            const cleanup = () => {
+              try {
+                if (fs.existsSync(tmpMp4)) fs.unlinkSync(tmpMp4);
+                if (fs.existsSync(tmpMp3)) fs.unlinkSync(tmpMp3);
+              } catch {}
+            };
+            res.on('finish', cleanup);
+            res.on('close', cleanup);
+            return;
+          }
+        }
+      } catch (audioErr: any) {
+        console.warn('[proxy-download] Direct audio conversion failed, falling back to yt-dlp:', audioErr?.message);
+      }
+    }
+
+    // ── Fallback: yt-dlp + FFmpeg ─────────────────────────────────────────────
     let ytdlpBin: string;
     let ffmpegBin: string;
     try {
@@ -588,6 +743,29 @@ app.get('/api/proxy-download', async (req, res) => {
     } catch (execErr: any) {
       const errDetail = (execErr?.stderr || execErr?.message || 'unknown error').slice(0, 300);
       console.error('[yt-dlp] Exec error:', errDetail);
+
+      // Last-chance safety net: try embed extraction if not already tried
+      if (mediaId && !isAudio) {
+        try {
+          const embedInfo = await extractFromEmbed(mediaId);
+          if (embedInfo?.videoUrl) {
+            console.log('[proxy-download] Recovered via last-chance embed stream!');
+            const cdnRes = await fetch(embedInfo.videoUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://www.instagram.com/',
+              },
+            });
+            if (cdnRes.ok && cdnRes.body) {
+              res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.${fileExt}"`);
+              res.setHeader('Content-Type', cdnRes.headers.get('content-type') || 'video/mp4');
+              res.setHeader('Cache-Control', 'no-cache');
+              const stream = Readable.fromWeb(cdnRes.body as any);
+              return stream.pipe(res);
+            }
+          }
+        } catch {}
+      }
 
       let userFriendlyMsg = 'Could not process media download.';
       if (errDetail.includes('not granting access') || errDetail.includes('empty media response') || errDetail.includes('Sign in') || errDetail.includes('cookies')) {

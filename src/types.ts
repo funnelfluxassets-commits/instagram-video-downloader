@@ -9,6 +9,7 @@ export interface DownloadOption {
   extension: 'mp4' | 'mp3' | 'jpg';
   recommend?: boolean;
   slideIndex?: number;
+  directUrl?: string;
 }
 
 export interface InstagramMediaResult {
