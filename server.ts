@@ -407,7 +407,13 @@ async function extractInstagramMedia(targetUrl: string) {
     const { stdout } = await execFileAsync(ytdlpBin, args, { timeout: 15000 });
     mediaInfo = JSON.parse(stdout.trim());
   } catch (err: any) {
-    console.warn('[yt-dlp] Extraction fallback triggered:', err?.message);
+    const errDetail = err?.stderr || err?.message || '';
+    console.warn('[yt-dlp] Extraction fallback triggered:', errDetail);
+
+    // If Instagram explicitly reports restricted audience
+    if (errDetail.includes("isn't available to everyone") || errDetail.includes("certain audiences")) {
+      throw new Error("This Instagram Reel has age or audience restrictions set by the creator. It cannot be viewed anonymously.");
+    }
   }
 
   const embedData = await embedPromise;
@@ -472,7 +478,7 @@ async function extractInstagramMedia(targetUrl: string) {
   return {
     id: mediaId,
     title: cleanTitle,
-    duration: mediaInfo.duration || 0,
+    duration: mediaInfo?.duration || 0,
     durationFormatted: isReel ? 'Reel' : 'Video',
     cover: coverUrl,
     author: {
@@ -481,9 +487,9 @@ async function extractInstagramMedia(targetUrl: string) {
       profileUrl: `https://www.instagram.com/${authorUsername}/`,
     },
     stats: {
-      likes: mediaInfo.like_count || 0,
-      comments: mediaInfo.comment_count || 0,
-      views: mediaInfo.view_count || 0,
+      likes: mediaInfo?.like_count || 0,
+      comments: mediaInfo?.comment_count || 0,
+      views: mediaInfo?.view_count || 0,
     },
     isReel,
     aspectRatio: isReel ? ('9:16' as const) : ('1:1' as const),
