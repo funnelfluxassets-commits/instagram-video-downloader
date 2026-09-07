@@ -215,6 +215,93 @@ function parseInstagramUrl(inputUrl: string): { mediaId: string; isReel: boolean
   }
 }
 
+// ─── SnapSave External Scraper Pipeline (Zero-Cookie, Zero-Cost, Cloud-Safe) ─
+interface SnapSaveItem {
+  url: string;
+  thumb: string | null;
+  isVideo: boolean;
+}
+
+function decodeSnapApp(args: string[]): string {
+  let [h, u, n, t, e, r] = args;
+  const tNum = Number(t);
+  const eNum = Number(e);
+  function decode(d: string, e: number, f: number) {
+    const g = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ+/'.split('');
+    const hArr = g.slice(0, e);
+    const iArr = g.slice(0, f);
+    let j = d.split('').reverse().reduce((a, b, c) => {
+      const idx = hArr.indexOf(b);
+      if (idx !== -1) return a + idx * Math.pow(e, c);
+      return a;
+    }, 0);
+    let k = '';
+    while (j > 0) {
+      k = iArr[j % f] + k;
+      j = Math.floor(j / f);
+    }
+    return k || '0';
+  }
+  let result = '';
+  for (let i = 0, len = h.length; i < len;) {
+    let s = '';
+    while (i < len && h[i] !== n[eNum]) {
+      s += h[i];
+      i++;
+    }
+    i++;
+    for (let j = 0; j < n.length; j++) s = s.replace(new RegExp(n[j], 'g'), j.toString());
+    result += String.fromCharCode(Number(decode(s, eNum, 10)) - tNum);
+  }
+  return decodeURIComponent(escape(result));
+}
+
+function decryptSnapSave(data: string): string {
+  const parts = data.split('decodeURIComponent(escape(r))}(')[1]?.split('))')[0]?.split(',').map((v) => v.replace(/"/g, '').trim());
+  if (!parts || parts.length < 6) return '';
+  const decoded = decodeSnapApp(parts);
+  const downloadHtml = decoded.split('getElementById("download-section").innerHTML = "')[1]?.split('"; document.getElementById("inputData").remove(); ')[0]?.replace(/\\(\\)?/g, '');
+  return downloadHtml || '';
+}
+
+async function extractFromSnapSave(targetUrl: string): Promise<SnapSaveItem[]> {
+  try {
+    const formData = new URLSearchParams();
+    formData.append('url', targetUrl);
+    const res = await fetch('https://snapsave.app/action.php?lang=en', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'origin': 'https://snapsave.app',
+        'referer': 'https://snapsave.app/',
+        'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36',
+      },
+      body: formData,
+    });
+
+    if (!res.ok) return [];
+    const text = await res.text();
+    const html = decryptSnapSave(text);
+    if (!html) return [];
+
+    const items: SnapSaveItem[] = [];
+    const itemRegex = /<div class="download-items"[\s\S]*?<div class="download-items__thumb"[^>]*>[\s\S]*?<img[^>]+src="([^"]+)"[\s\S]*?<div class="download-items__btn"[^>]*>[\s\S]*?<a[^>]+href="([^"]+)"[\s\S]*?<\/div>/g;
+    let match;
+    while ((match = itemRegex.exec(html)) !== null) {
+      const thumb = match[1];
+      const url = match[2];
+      const isVideo = /icon-dlvideo|download video/i.test(match[0]);
+      if (url && url !== '/' && url.startsWith('http')) {
+        items.push({ url, thumb, isVideo });
+      }
+    }
+    return items;
+  } catch (err: any) {
+    console.warn('[snapsave] Scraper error:', err?.message);
+    return [];
+  }
+}
+
 // ─── Free Public Embed Extractor (100% Free, no API keys, no cloud IP blocks) ─
 interface EmbedMediaData {
   videoUrl: string | null;
@@ -385,10 +472,16 @@ async function extractInstagramMedia(targetUrl: string) {
 
   const { mediaId, isReel, cleanUrl } = parsed;
 
-  // 1. Query instant embed extractor in background (free, fast, no IP blocks)
+  // 1. Query TikWM-style external scraper (100% free, fast, no datacenter IP blocks, zero cookies needed)
+  const snapPromise = extractFromSnapSave(cleanUrl).catch((e) => {
+    console.warn('[snapsave] Fallback error:', e?.message);
+    return [] as SnapSaveItem[];
+  });
+
+  // 2. Query instant embed extractor in background (free, fast, provides real caption + username)
   const embedPromise = extractFromEmbed(mediaId).catch(() => null);
 
-  // 2. Try yt-dlp dump JSON
+  // 3. Try yt-dlp dump JSON
   let mediaInfo: any = null;
   try {
     const ytdlpBin = await ensureYtDlp();
@@ -416,15 +509,123 @@ async function extractInstagramMedia(targetUrl: string) {
     }
   }
 
-  const embedData = await embedPromise;
+  const [snapItems, embedData] = await Promise.all([snapPromise, embedPromise]);
+  const primarySnapItem = snapItems.length > 0 ? snapItems[0] : null;
+
+  if (!mediaInfo && (!snapItems || snapItems.length === 0) && !embedData?.videoUrl) {
+    throw new Error('Could not process media download. The Instagram post may be private, age-restricted, or removed.');
+  }
 
   const rawTitle = mediaInfo?.description || mediaInfo?.title || embedData?.caption || (isReel ? 'Instagram Reel' : 'Instagram Video');
   const cleanTitle = rawTitle.length > 80 ? rawTitle.substring(0, 80) + '...' : rawTitle;
   const authorName = mediaInfo?.uploader || mediaInfo?.channel || embedData?.username || 'Instagram Creator';
   const authorUsername = mediaInfo?.uploader_id || embedData?.username || authorName.replace(/[^\w]/g, '').toLowerCase();
-  const coverUrl = mediaInfo?.thumbnail || embedData?.coverUrl || `https://www.instagram.com/p/${mediaId}/media/?size=l`;
-  const directVideoUrl = embedData?.videoUrl || undefined;
+  const coverUrl = primarySnapItem?.thumb || mediaInfo?.thumbnail || embedData?.coverUrl || `https://www.instagram.com/p/${mediaId}/media/?size=l`;
+  const directVideoUrl = (primarySnapItem?.isVideo ? primarySnapItem.url : null) || embedData?.videoUrl || undefined;
 
+  // Handle multi-slide / carousel posts
+  if (snapItems.length > 1) {
+    const downloads: any[] = snapItems.map((item, index) => ({
+      id: `ig_slide_${index + 1}`,
+      label: item.isVideo ? `Download Video Slide ${index + 1}` : `Download Photo Slide ${index + 1}`,
+      quality: item.isVideo ? '1080p Full HD' : 'HD Photo',
+      description: item.isVideo ? `Slide ${index + 1} video in high definition MP4` : `Slide ${index + 1} original photo in high resolution JPG`,
+      badge: item.isVideo ? `SLIDE ${index + 1} • MP4` : `SLIDE ${index + 1} • JPG`,
+      type: item.isVideo ? 'video' : 'photo',
+      url: item.isVideo ? cleanUrl : item.url,
+      directUrl: item.url,
+      extension: item.isVideo ? 'mp4' : 'jpg',
+      slideIndex: index,
+      recommend: index === 0,
+    }));
+
+    const firstVideo = snapItems.find((i) => i.isVideo);
+    if (firstVideo) {
+      downloads.push({
+        id: 'ig_audio_mp3',
+        label: 'Download Audio (MP3)',
+        quality: 'audio',
+        description: 'Extract background song or voice soundtrack as 320kbps MP3',
+        badge: 'MP3 AUDIO',
+        type: 'audio',
+        url: cleanUrl,
+        directUrl: firstVideo.url,
+        extension: 'mp3',
+        recommend: false,
+      });
+    }
+
+    return {
+      id: mediaId,
+      title: cleanTitle,
+      duration: mediaInfo?.duration || 0,
+      durationFormatted: `${snapItems.length} Slides`,
+      cover: coverUrl,
+      author: {
+        name: authorName,
+        username: authorUsername,
+        profileUrl: `https://www.instagram.com/${authorUsername}/`,
+      },
+      stats: {
+        likes: mediaInfo?.like_count || 0,
+        comments: mediaInfo?.comment_count || 0,
+      },
+      downloads,
+      originalUrl: cleanUrl,
+      isReel,
+    };
+  }
+
+  // Handle single photo posts
+  if (primarySnapItem && !primarySnapItem.isVideo) {
+    const downloads: any[] = [
+      {
+        id: 'ig_photo_main',
+        label: 'Download Photo (HD)',
+        quality: 'HD Photo',
+        description: 'Original high-resolution image in JPG',
+        badge: 'HD IMAGE',
+        type: 'photo',
+        url: primarySnapItem.url,
+        directUrl: primarySnapItem.url,
+        extension: 'jpg',
+        recommend: true,
+      },
+      {
+        id: 'ig_thumbnail',
+        label: 'Download HD Cover Artwork',
+        quality: 'thumb',
+        description: 'Full-resolution video artwork image in JPG',
+        badge: 'HD IMAGE',
+        type: 'thumbnail',
+        url: coverUrl,
+        extension: 'jpg',
+        recommend: false,
+      },
+    ];
+
+    return {
+      id: mediaId,
+      title: cleanTitle,
+      duration: 0,
+      durationFormatted: 'Photo',
+      cover: coverUrl,
+      author: {
+        name: authorName,
+        username: authorUsername,
+        profileUrl: `https://www.instagram.com/${authorUsername}/`,
+      },
+      stats: {
+        likes: mediaInfo?.like_count || 0,
+        comments: mediaInfo?.comment_count || 0,
+      },
+      downloads,
+      originalUrl: cleanUrl,
+      isReel: false,
+    };
+  }
+
+  // Handle standard video / reels posts
   const downloads: any[] = [
     {
       id: 'ig_1080p_fhd',
@@ -562,11 +763,11 @@ app.get('/api/proxy-download', async (req, res) => {
 
     // ── 1. Thumbnail / Photo Image download ──────────────────────────────────
     if (type === 'thumbnail' || type === 'photo' || (typeof url === 'string' && (url.includes('.jpg') || url.includes('.webp') || url.includes('.png')))) {
-      const imgUrl = typeof url === 'string' ? url.trim() : '';
+      const imgUrl = (typeof url === 'string' && url.trim()) || (typeof directUrl === 'string' ? directUrl.trim() : '');
       if (!imgUrl) return res.status(400).json({ error: 'Missing image URL.' });
 
       const imgRes = await fetch(imgUrl, {
-        headers: { 'User-Agent': 'Mozilla/5.0', Referer: 'https://www.instagram.com/' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36', Referer: 'https://www.instagram.com/' },
       });
       if (!imgRes.ok) return res.status(404).json({ error: 'Image not found.' });
 
@@ -586,7 +787,7 @@ app.get('/api/proxy-download', async (req, res) => {
     const qualityStr = typeof quality === 'string' ? quality : '1080';
     if (isAudio) fileExt = 'mp3';
 
-    // ── Direct Embed Stream (Fast, 100% Free, bypasses cloud IP blocks) ───────
+    // ── Direct Stream (Fast, 100% Free, bypasses cloud IP blocks) ─────────────
     let directStreamUrl = typeof directUrl === 'string' && directUrl.startsWith('http') ? directUrl.trim() : null;
     if (!directStreamUrl && mediaId) {
       const embedInfo = await extractFromEmbed(mediaId);
@@ -595,10 +796,10 @@ app.get('/api/proxy-download', async (req, res) => {
       }
     }
 
-    // Direct Video Stream (Stream MP4 directly from Meta CDN)
+    // Direct Video Stream (Stream MP4 directly from CDN)
     if (directStreamUrl && !isAudio) {
       try {
-        console.log('[proxy-download] Serving direct video stream from Instagram CDN');
+        console.log('[proxy-download] Serving direct video stream from CDN');
         const cdnRes = await fetch(directStreamUrl, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
@@ -607,7 +808,10 @@ app.get('/api/proxy-download', async (req, res) => {
         });
 
         if (cdnRes.ok && cdnRes.body) {
-          const contentType = cdnRes.headers.get('content-type') || 'video/mp4';
+          const upstreamContentType = cdnRes.headers.get('content-type');
+          const contentType = upstreamContentType && upstreamContentType !== 'application/octet-stream'
+            ? upstreamContentType
+            : (fileExt === 'mp4' ? 'video/mp4' : 'application/octet-stream');
           const contentLength = cdnRes.headers.get('content-length');
 
           res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}.${fileExt}"`);
