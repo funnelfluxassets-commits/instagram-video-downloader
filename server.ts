@@ -483,6 +483,7 @@ async function extractInstagramMedia(targetUrl: string) {
 
   // 3. Try yt-dlp dump JSON
   let mediaInfo: any = null;
+  let isAudienceRestricted = false;
   try {
     const ytdlpBin = await ensureYtDlp();
     const cookieArgs = ensureCookiesFile();
@@ -503,9 +504,9 @@ async function extractInstagramMedia(targetUrl: string) {
     const errDetail = err?.stderr || err?.message || '';
     console.warn('[yt-dlp] Extraction fallback triggered:', errDetail);
 
-    // If Instagram explicitly reports restricted audience
+    // Track if Instagram explicitly reported restricted audience
     if (errDetail.includes("isn't available to everyone") || errDetail.includes("certain audiences")) {
-      throw new Error("This Instagram Reel has age or audience restrictions set by the creator. It cannot be viewed anonymously.");
+      isAudienceRestricted = true;
     }
   }
 
@@ -513,6 +514,9 @@ async function extractInstagramMedia(targetUrl: string) {
   const primarySnapItem = snapItems.length > 0 ? snapItems[0] : null;
 
   if (!mediaInfo && (!snapItems || snapItems.length === 0) && !embedData?.videoUrl) {
+    if (isAudienceRestricted) {
+      throw new Error("This Instagram Reel has age or audience restrictions set by the creator. It cannot be viewed anonymously.");
+    }
     throw new Error('Could not process media download. The Instagram post may be private, age-restricted, or removed.');
   }
 
