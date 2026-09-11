@@ -101,7 +101,29 @@ export const ResultCard: React.FC<ResultCardProps> = ({ result, onSuccessfulDown
         endpoint = `/api/proxy-download?id=${result.id}&url=${encodeURIComponent(result.originalUrl)}&quality=${encodeURIComponent(option.quality)}&type=${option.type}&filename=${encodeURIComponent(safeTitle)}&ext=${ext}&isShorts=${result.isReel ? '1' : '0'}${directParam}`;
       }
 
-      const response = await fetch(endpoint);
+      let response: Response | null = null;
+
+      // 1. Try direct in-browser download if direct CDN URL is available (0 MB server bandwidth)
+      const targetDirect = option.directUrl || (option.type === 'thumbnail' ? (option.url || result.cover) : null);
+      if (targetDirect && option.type !== 'audio') {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 3500);
+          const directRes = await fetch(targetDirect, { signal: controller.signal });
+          clearTimeout(timer);
+          if (directRes.ok) {
+            response = directRes;
+          }
+        } catch {
+          // Direct fetch blocked or timed out, fall back below
+        }
+      }
+
+      // 2. If direct fetch not available or failed, use Vercel proxy
+      if (!response) {
+        response = await fetch(endpoint);
+      }
+
       if (!response.ok) {
         const errorJson = await response.json().catch(() => null);
         const msg = errorJson?.detail
